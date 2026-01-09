@@ -152,28 +152,16 @@ python app.py --save-voice
 
 ### Implementation Details
 
-#### TextToSpeechService with ChatterBox
-The new TextToSpeechService leverages ChatterBox's advanced features:
+#### TextToSpeechService with Coqui-ai
 
-```python
-from chatterbox.tts import ChatterboxTTS
+uv remove chatterbox-tts
+uv add coqui-tts
 
-class TextToSpeechService:
-    def __init__(self, device: str = "cuda" if torch.cuda.is_available() else "cpu"):
-        self.device = device
-        self.model = ChatterboxTTS.from_pretrained(device=device)
-        self.sample_rate = self.model.sr
 
-    def synthesize(self, text: str, audio_prompt_path: str = None,
-                  exaggeration: float = 0.5, cfg_weight: float = 0.5):
-        wav = self.model.generate(
-            text,
-            audio_prompt_path=audio_prompt_path,
-            exaggeration=exaggeration,
-            cfg_weight=cfg_weight
-        )
-        return self.sample_rate, wav.squeeze().cpu().numpy()
-```
+Faster response with : tts_models/en/ljspeech/vits--neon
+
+have to install espeak: brew install espeak
+
 
 Key improvements over the previous Bark implementation:
 - **Voice Cloning**: Pass an audio file to clone any voice
