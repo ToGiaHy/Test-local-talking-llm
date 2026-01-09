@@ -77,7 +77,16 @@ python app.py --model codellama
 # Save generated voice samples
 python app.py --save-voice
 ```
+#### TextToSpeechService with Coqui-ai
+```
+uv remove chatterbox-tts
+uv add coqui-tts
 
+
+Faster response with : tts_models/en/ljspeech/vits--neon
+
+have to install espeak: brew install espeak
+```
 ### Configuration Options
 
 - `--voice`: Path to audio file for voice cloning
@@ -92,15 +101,7 @@ python app.py --save-voice
 
 ### Implementation Details
 
-#### TextToSpeechService with Coqui-ai
 
-uv remove chatterbox-tts
-uv add coqui-tts
-
-
-Faster response with : tts_models/en/ljspeech/vits--neon
-
-have to install espeak: brew install espeak
 
 
 Key improvements over the previous Bark implementation:
