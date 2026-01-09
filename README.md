@@ -44,7 +44,16 @@ pip install -e .
 # Download NLTK data
 python -c "import nltk; nltk.download('punkt')"
 ```
+#### Install TextToSpeechService with Coqui-ai
+```
+uv remove chatterbox-tts
+uv add coqui-tts
 
+
+Faster response with : tts_models/en/ljspeech/vits--neon
+
+have to install espeak: brew install espeak
+```
 #### Install and Setup Ollama
 
 ```bash
@@ -77,16 +86,7 @@ python app.py --model codellama
 # Save generated voice samples
 python app.py --save-voice
 ```
-#### TextToSpeechService with Coqui-ai
-```
-uv remove chatterbox-tts
-uv add coqui-tts
 
-
-Faster response with : tts_models/en/ljspeech/vits--neon
-
-have to install espeak: brew install espeak
-```
 ### Configuration Options
 
 - `--voice`: Path to audio file for voice cloning
