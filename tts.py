@@ -3,22 +3,20 @@ import torch
 import warnings
 import numpy as np
 import torchaudio as ta
-from chatterbox.tts import ChatterboxTTS
+from TTS.api import TTS  # ← Coqui TTS main API
 
-warnings.filterwarnings(
-    "ignore",
-    message="torch.nn.utils.weight_norm is deprecated in favor of torch.nn.utils.parametrizations.weight_norm.",
-)
+warnings.filterwarnings("ignore")  # Clean up general warnings if needed
+
+nltk.download('punkt', quiet=True)  # For sentence tokenization
 
 
 class TextToSpeechService:
     def __init__(self, device: str | None = None):
         """
-        Initializes the TextToSpeechService class with ChatterBox TTS.
+        Initializes the TextToSpeechService with Coqui TTS XTTS-v2.
 
         Args:
-            device (str, optional): The device to be used for the model. If None, will auto-detect.
-                Can be "cuda", "mps", or "cpu".
+            device (str, optional): "cuda", "mps", or "cpu". Auto-detects if None.
         """
         if device is None:
             if torch.cuda.is_available():
@@ -30,93 +28,109 @@ class TextToSpeechService:
         else:
             self.device = device
 
-        print(f"Using device: {self.device}")
+        print(f"Loading Coqui XTTS-v2 on device: {self.device}")
 
-        if self.device == "cuda" and not torch.cuda.is_available():
-            print("CUDA requested but not available, falling back to CPU")
-            self.device = "cpu"
-
-        self._patch_torch_load()
-        self.model = ChatterboxTTS.from_pretrained(device=self.device)
-        self.sample_rate = self.model.sr
-
-    def _patch_torch_load(self):
-        """
-        Patches torch.load to automatically map tensors to the correct device.
-        This is needed because ChatterBox models may have been saved on CUDA.
-        """
-        map_location = torch.device(self.device)
-
-        if not hasattr(torch, '_original_load'):
-            torch._original_load = torch.load
-
-        def patched_torch_load(*args, **kwargs):
-            if 'map_location' not in kwargs:
-                kwargs['map_location'] = map_location
-            return torch._original_load(*args, **kwargs)
-
-        torch.load = patched_torch_load
-
-    def synthesize(self, text: str, audio_prompt_path: str | None = None, exaggeration: float = 0.5, cfg_weight: float = 0.5):
-        """
-        Synthesizes audio from the given text using ChatterBox TTS.
-
-        Args:
-            text (str): The input text to be synthesized.
-            audio_prompt_path (str, optional): Path to audio file for voice cloning. Defaults to None.
-            exaggeration (float, optional): Emotion exaggeration control (0-1). Defaults to 0.5.
-            cfg_weight (float, optional): Control for pacing and delivery. Defaults to 0.5.
-
-        Returns:
-            tuple: A tuple containing the sample rate and the generated audio array.
-        """
-        wav = self.model.generate(
-            text,
-            audio_prompt_path=audio_prompt_path,
-            exaggeration=exaggeration,
-            cfg_weight=cfg_weight
+        # Load the best zero-shot multilingual model (XTTS-v2)
+        self.model = TTS(
+            model_name="tts_models/en/ljspeech/vits--neon",
+            progress_bar=True,
+            gpu=(self.device == "cuda")  # Coqui handles MPS/CPU as non-gpu
         )
 
-        # Convert tensor to numpy array format compatible with sounddevice
-        audio_array = wav.squeeze().cpu().numpy()
-        return self.sample_rate, audio_array
+        # XTTS-v2 output sample rate is fixed at 24000 Hz
+        self.sample_rate = 24000
 
-    def long_form_synthesize(self, text: str, audio_prompt_path: str | None = None, exaggeration: float = 0.5, cfg_weight: float = 0.5):
+        # Move model explicitly if needed (Coqui usually handles it)
+        if self.device != "cpu":
+            self.model.to(self.device)
+
+    def synthesize(
+        self,
+        text: str,
+        audio_prompt_path: str | None = None,
+        exaggeration: float = 0.5,
+        cfg_weight: float = 0.5,  # ignored in XTTS
+    ):
         """
-        Synthesizes audio from the given long-form text using ChatterBox TTS.
+        Synthesizes audio from text using Coqui XTTS-v2.
 
         Args:
-            text (str): The input text to be synthesized.
-            audio_prompt_path (str, optional): Path to audio file for voice cloning. Defaults to None.
-            exaggeration (float, optional): Emotion exaggeration control (0-1). Defaults to 0.5.
-            cfg_weight (float, optional): Control for pacing and delivery. Defaults to 0.5.
+            text (str): Input text.
+            audio_prompt_path (str, optional): Reference audio for voice cloning.
+            exaggeration (float, optional): Maps to temperature (0.0-1.0 → more variation).
+            cfg_weight (float, optional): Ignored (no direct equivalent in XTTS).
 
         Returns:
-            tuple: A tuple containing the sample rate and the generated audio array.
+            tuple: (sample_rate, numpy_audio_array)
+        """
+        # Map exaggeration → temperature (0.3 calm → 0.9 expressive)
+        temperature = 0.4 + exaggeration * 0.5  # 0.4-0.9 range works well
+
+        # XTTS returns list of numpy arrays (one per sentence if split, but we pass single text)
+        wav_list = self.model.tts(
+            text=text,
+            speaker_wav=audio_prompt_path,  # voice cloning reference
+            #language="en",                  # change to "es", "fr", etc. if needed
+            temperature=temperature,
+            #speaker="Claribel Dervla"
+            # Optional: add split_sentences=True for very long text, but we handle it in long_form
+        )
+
+        # tts() returns numpy float32 array already in [-1, 1]
+        audio_array = np.array(wav_list) if isinstance(wav_list, list) else wav_list
+
+        return self.sample_rate, audio_array
+
+    def long_form_synthesize(
+        self,
+        text: str,
+        audio_prompt_path: str | None = None,
+        exaggeration: float = 0.5,
+        cfg_weight: float = 0.5,  # ignored
+    ):
+        """
+        Handles long text by splitting into sentences + adding short silence.
         """
         pieces = []
         sentences = nltk.sent_tokenize(text)
-        silence = np.zeros(int(0.25 * self.sample_rate))
+        silence_duration = 0.25  # seconds of silence between sentences
+        silence = np.zeros(int(silence_duration * self.sample_rate))
 
         for sent in sentences:
-            sample_rate, audio_array = self.synthesize(
-                sent,
+            if not sent.strip():
+                continue
+            _, audio_array = self.synthesize(
+                text=sent,
                 audio_prompt_path=audio_prompt_path,
                 exaggeration=exaggeration,
                 cfg_weight=cfg_weight
             )
-            pieces += [audio_array, silence.copy()]
+            pieces.extend([audio_array, silence.copy()])
 
-        return self.sample_rate, np.concatenate(pieces)
+        # Remove last silence if present
+        if pieces:
+            full_audio = np.concatenate(pieces[:-1])  # drop final silence
+        else:
+            full_audio = np.array([])
 
-    def save_voice_sample(self, text: str, output_path: str, audio_prompt_path: str | None = None):
+        return self.sample_rate, full_audio
+
+    def save_voice_sample(
+        self,
+        text: str,
+        output_path: str,
+        audio_prompt_path: str | None = None,
+    ):
         """
-        Saves a voice sample to file for later use as voice prompt.
-
-        Args:
-            text (str): The text to synthesize.
-            output_path (str): Path where to save the audio file.
-            audio_prompt_path (str, optional): Path to audio file for voice cloning.
+        Saves a synthesized sample to WAV file (useful for creating new voice prompts).
         """
-        wav = self.model.generate(text, audio_prompt_path=audio_prompt_path)
-        ta.save(output_path, wav, self.sample_rate)
+        _, audio_array = self.synthesize(
+            text=text,
+            audio_prompt_path=audio_prompt_path,
+            exaggeration=0.6,  # moderate expressiveness for samples
+        )
+
+        # Coqui returns float32 [-1,1], torchaudio expects float32 or int16
+        # Scale to int16 for standard WAV
+        audio_int16 = (audio_array * 32767).astype(np.int16)
+        ta.save(output_path, torch.from_numpy(audio_int16).unsqueeze(0), self.sample_rate)
