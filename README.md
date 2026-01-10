@@ -54,6 +54,17 @@ Faster response with : tts_models/en/ljspeech/vits--neon
 
 have to install espeak: brew install espeak
 ```
+#### Install TextToSpeechService with Supertonic
+```
+uv pip install supertonic
+```
+
+#### Install TextToSpeechService with Kokoro
+```
+uv pip install kokoro
+Bug: if use pip is not install: python -m pip install --upgrade pip
+```
+
 #### Install and Setup Ollama
 
 ```bash
