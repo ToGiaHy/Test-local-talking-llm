@@ -16,7 +16,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # or on Windows: powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 
 # Clone the repository
-git clone https://github.com/vndee/local-talking-llm.git
+git clone https://github.com/ToGiaHy/Test-local-talking-llm.git
 cd local-talking-llm
 
 # Install dependencies using uv (recommended)
@@ -29,25 +29,6 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 python -c "import nltk; nltk.download('punkt_tab')"
 ```
 
-#### Option 2: Using pip (Alternative)
-
-If you prefer to use pip, install directly from pyproject.toml:
-
-```bash
-# Clone the repository
-git clone https://github.com/vndee/local-talking-llm.git
-cd local-talking-llm
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install from pyproject.toml (NOT requirements.txt)
-pip install -e .
-
-# Download NLTK data
-python -c "import nltk; nltk.download('punkt')"
-```
 #### Install TextToSpeechService with Coqui-ai
 ```
 uv remove chatterbox-tts
