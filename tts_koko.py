@@ -41,7 +41,7 @@ class TextToSpeechService:
         audio_prompt_path: str | None = None,
         exaggeration: float = 0.5,
         cfg_weight: float = 0.5,
-        voice: str = "af_bella",           # Default voice - can be overridden
+        voice: str = "af_sarah",           # Default voice - can be overridden
     ) -> tuple[int, np.ndarray]:
         """
         Generate speech from text using Kokoro.
