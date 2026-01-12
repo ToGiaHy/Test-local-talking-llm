@@ -198,28 +198,31 @@ if __name__ == "__main__":
             audio_np = (
                 np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
             )
-
+            
             if audio_np.size > 0:
                 with console.status("Transcribing...", spinner="dots"):
                     text = transcribe(audio_np)
                 console.print(f"[yellow]You: {text}")
-
+                
                 with console.status("Generating response...", spinner="dots"):
+                    start = time.perf_counter()
                     response = get_llm_response(text)
-
+                    llm_time = time.perf_counter() - start
                     # Analyze emotion and adjust exaggeration dynamically
                     dynamic_exaggeration = analyze_emotion(response)
 
                     # Use lower cfg_weight for more expressive responses
                     dynamic_cfg = args.cfg_weight * 0.8 if dynamic_exaggeration > 0.6 else args.cfg_weight
-
+                    start = time.perf_counter()
                     sample_rate, audio_array = tts.long_form_synthesize(
                         response,
                         audio_prompt_path=args.voice,
                         exaggeration=dynamic_exaggeration,
                         cfg_weight=dynamic_cfg
                     )
-
+                    tts_time = time.perf_counter() - start
+                console.print(f"[blue]TTS time: {tts_time}")
+                console.print(f"[yellow]LLM time: {llm_time}")
                 console.print(f"[cyan]Assistant: {response}")
                 console.print(f"[dim](Emotion: {dynamic_exaggeration:.2f}, CFG: {dynamic_cfg:.2f})[/dim]")
 
