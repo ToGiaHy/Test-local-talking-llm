@@ -39,7 +39,7 @@ class TextToSpeechService:
         print("Available preset voices:", self.AVAILABLE_VOICES)
 
         # Default voice
-        self.current_voice = "M5"
+        self.current_voice = "F2"
         self.voice_style = self.model.get_voice_style(voice_name=self.current_voice)
         print(f"Default voice set to: {self.current_voice}")
 
