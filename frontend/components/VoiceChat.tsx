@@ -1,0 +1,87 @@
+import { useRef } from "react";
+
+export default function VoiceChat() {
+  const wsRef = useRef<WebSocket | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const micCtxRef = useRef<AudioContext | null>(null);
+  const allowMicRef = useRef(true);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+
+  const TTS_SAMPLE_RATE = 24000;
+
+  const start = async () => {
+    // ── Audio output ─────────────────────────────
+    audioCtxRef.current = new AudioContext({ sampleRate: TTS_SAMPLE_RATE });
+    await audioCtxRef.current.resume();
+
+    wsRef.current = new WebSocket("ws://localhost:8000/voice");
+    wsRef.current.binaryType = "arraybuffer";
+
+    wsRef.current.onmessage = (event) => {
+      // ---- STATUS ----
+      if (typeof event.data === "string") {
+        const msg = JSON.parse(event.data);
+
+        if (msg.type === "status") {
+          allowMicRef.current = msg.state === "listening";
+          console.log("STATUS:", msg.state);
+        }
+        return;
+      }
+
+      // ---- RAW PCM PLAYBACK ----
+      const pcm = new Int16Array(event.data);
+      const f32 = new Float32Array(pcm.length);
+
+      for (let i = 0; i < pcm.length; i++) {
+        f32[i] = pcm[i] / 32768;
+      }
+
+      const ctx = audioCtxRef.current!;
+      const buffer = ctx.createBuffer(1, f32.length, TTS_SAMPLE_RATE);
+      buffer.copyToChannel(f32, 0);
+
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+
+      source.onended = () => {
+        wsRef.current?.send(
+          JSON.stringify({ type: "audio_playback_complete" })
+        );
+      };
+
+      source.start();
+    };
+
+    // ── Microphone input ─────────────────────────
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+    micCtxRef.current = new AudioContext({ sampleRate: 16000 });
+    const src = micCtxRef.current.createMediaStreamSource(stream);
+
+    processorRef.current = micCtxRef.current.createScriptProcessor(4096, 1, 1);
+    src.connect(processorRef.current);
+    processorRef.current.connect(micCtxRef.current.destination);
+
+    processorRef.current.onaudioprocess = (e) => {
+      if (!allowMicRef.current) return;
+
+      const input = e.inputBuffer.getChannelData(0);
+      const pcm = new Int16Array(input.length);
+
+      for (let i = 0; i < input.length; i++) {
+        const s = Math.max(-1, Math.min(1, input[i]));
+        pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+      }
+
+      wsRef.current?.send(pcm.buffer.slice(0));
+    };
+  };
+
+  return (
+    <div style={{ padding: 40 }}>
+      <button onClick={start}>Start Talking</button>
+    </div>
+  );
+}
