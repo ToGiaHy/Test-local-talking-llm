@@ -1,16 +1,15 @@
 import { useRef } from "react";
 
 export default function VoiceChat() {
-  const wsRef = useRef<WebSocket | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const micCtxRef = useRef<AudioContext | null>(null);
+  const wsRef = useRef(null);
+  const audioCtxRef = useRef(null);
+  const micCtxRef = useRef(null);
   const allowMicRef = useRef(true);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const processorRef = useRef(null);
 
   const TTS_SAMPLE_RATE = 24000;
 
   const start = async () => {
-    // ── Audio output ─────────────────────────────
     audioCtxRef.current = new AudioContext({ sampleRate: TTS_SAMPLE_RATE });
     await audioCtxRef.current.resume();
 
@@ -18,18 +17,14 @@ export default function VoiceChat() {
     wsRef.current.binaryType = "arraybuffer";
 
     wsRef.current.onmessage = (event) => {
-      // ---- STATUS ----
       if (typeof event.data === "string") {
         const msg = JSON.parse(event.data);
-
         if (msg.type === "status") {
           allowMicRef.current = msg.state === "listening";
-          console.log("STATUS:", msg.state);
         }
         return;
       }
 
-      // ---- RAW PCM PLAYBACK ----
       const pcm = new Int16Array(event.data);
       const f32 = new Float32Array(pcm.length);
 
@@ -37,7 +32,7 @@ export default function VoiceChat() {
         f32[i] = pcm[i] / 32768;
       }
 
-      const ctx = audioCtxRef.current!;
+      const ctx = audioCtxRef.current;
       const buffer = ctx.createBuffer(1, f32.length, TTS_SAMPLE_RATE);
       buffer.copyToChannel(f32, 0);
 
@@ -54,13 +49,14 @@ export default function VoiceChat() {
       source.start();
     };
 
-    // ── Microphone input ─────────────────────────
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
     micCtxRef.current = new AudioContext({ sampleRate: 16000 });
     const src = micCtxRef.current.createMediaStreamSource(stream);
 
-    processorRef.current = micCtxRef.current.createScriptProcessor(4096, 1, 1);
+    processorRef.current =
+      micCtxRef.current.createScriptProcessor(4096, 1, 1);
+
     src.connect(processorRef.current);
     processorRef.current.connect(micCtxRef.current.destination);
 
@@ -75,7 +71,7 @@ export default function VoiceChat() {
         pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
       }
 
-      wsRef.current?.send(pcm.buffer.slice(0));
+      wsRef.current?.send(pcm.buffer);
     };
   };
 

@@ -31,7 +31,7 @@ app.add_middleware(
 )
 
 console.print("[yellow]Loading Whisper...[/yellow]")
-whisper_model = whisper.load_model("tiny.en")
+whisper_model = whisper.load_model("base.en")
 
 console.print("[yellow]Initializing TTS...[/yellow]")
 tts = TextToSpeechService()
